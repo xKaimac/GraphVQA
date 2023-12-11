@@ -1,11 +1,13 @@
+## Changes made in this fork
+
+Some minor source code tweaks to include support for modern hardware and specific versions of packages. integration of Weights and Biases has also been added.
+
 # GraphVQA: Language-Guided Graph Neural Networks for Scene Graph Question Answering
 
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/graghvqa-language-guided-graph-neural/graph-question-answering-on-gqa)](https://paperswithcode.com/sota/graph-question-answering-on-gqa?p=graghvqa-language-guided-graph-neural)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/codexxxl/GraphVQA/blob/master/LICENSE)
 
-
-
-This repo provides the source code of our paper: [GraphVQA: Language-Guided Graph Neural Networks for Scene Graph Question Answering](https://www.aclweb.org/anthology/2021.maiworkshop-1.12/) (NAACL 2021 MAI Workshop) [[PDF]](https://arxiv.org/pdf/2104.10283.pdf).
+This repo provides the source code of the paper: [GraphVQA: Language-Guided Graph Neural Networks for Scene Graph Question Answering](https://www.aclweb.org/anthology/2021.maiworkshop-1.12/) (NAACL 2021 MAI Workshop) [[PDF]](https://arxiv.org/pdf/2104.10283.pdf).
 ```
 @inproceedings{2021graphvqa,
   author    = {Weixin Liang and
