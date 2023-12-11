@@ -30,6 +30,7 @@ CUDA_VISIBLE_DEVICES=2 python /home/ubuntu/GQA/DialogGQA/GraphVQA-master/mainExp
     --resume ./gtsg_large_cap_outputdir/checkpoint0029.pth
 
 """
+import torch
 import argparse
 import os
 import random
@@ -39,7 +40,6 @@ import warnings
 import numpy as np
 import logging
 from tqdm import tqdm
-import torch
 import torch_geometric
 import torch.backends.cudnn as cudnn
 import pathlib
@@ -48,6 +48,12 @@ import util.misc as utils
 from gqa_dataset_entry import GQATorchDataset, GQATorchDataset_collate_fn
 from pipeline_model_gat import PipelineModel # use gat model
 import json
+
+############################
+# For tracking performance #
+############################
+import wandb
+
 # GPU settings
 # assert torch.cuda.is_available()
 # os.environ['CUDA_VISIBLE_DEVICES'] = config.GPU
@@ -69,7 +75,7 @@ def get_args_parser():
     parser.add_argument('--log-name', default='gtsg.log', type=str, metavar='PATH',
                         help='path to the log file (default: output.log)')
     # parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
-    parser.add_argument('-j', '--workers', default=32, type=int, metavar='N',
+    parser.add_argument('-j', '--workers', default=16, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
     parser.add_argument('--epochs', default=300, type=int, metavar='N',
                         help='number of total epochs to run')
@@ -148,6 +154,25 @@ def main(args):
     utils.init_distributed_mode(args)
     print("git:\n  {}\n".format(utils.get_sha()))
     print(args)
+
+    ###############
+    # W & B setup #
+    ###############
+    wandb.login()
+
+    run = wandb.init(
+        project="GraphVQA",
+        config={
+            "learning_rate": args.lr,
+            "optimizer": "Adam_custom",
+            "epochs": args.epochs,
+            "lr_drop": args.lr_drop,
+            "batch_size": args.batch_size,
+            "momentum": args.momentum,
+            "weight-decay": args.weight_decay,
+            "world_size": args.world_size
+        },
+    )
 
     if args.seed is not None:
         # random.seed(args.seed)
@@ -324,7 +349,7 @@ def main(args):
         # "short_answer": torch.nn.BCEWithLogitsLoss().to(device=cuda), # sigmoid
         "execution_bitmap": torch.nn.BCELoss().to(device=cuda),
     }
-
+    
     ##################################
     # If Evaluate Only
     ##################################
@@ -382,7 +407,8 @@ def main(args):
                     'epoch': epoch,
                     'args': args,
                 }, checkpoint_path)
-
+    
+    wandb.finish()
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
     # batch_time = AverageMeter('Time', ':6.3f')
@@ -559,6 +585,15 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
         if i % args.print_freq == 0 or i == len(train_loader) - 1:
             progress.display(i)
+        
+        wandb.log({
+            "Train loss": losses.avg,
+            "Short Answer Accuracy": short_answer_acc.avg,
+            "Program Accuracy": program_acc.avg,
+            "Program Group Accuracy": program_group_acc.avg,
+            "Program Non-Empty Accuracy": program_non_empty_acc.avg,
+            "Epoch": epoch
+        })
 
     ##################################
     # Give final score
@@ -807,7 +842,7 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
                     ##################################
                     # print Question and Question ID
                     ##################################
-                    question = questions[:, batch_idx].cpu()
+                    question = questions[:, batch_idx]
                     question_sent, _ = GQATorchDataset.indices_to_string(question, True)
                     print("Question({}) QID({}):".format(batch_idx, questionID[batch_idx]), question_sent)
                     if utils.is_main_process():
@@ -819,7 +854,7 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
 
                     for instr_idx in range(GQATorchDataset.MAX_EXECUTION_STEP):
                         true_batch_idx = instr_idx + GQATorchDataset.MAX_EXECUTION_STEP * batch_idx
-                        gt = programs[:, true_batch_idx].cpu()
+                        gt = programs[:, true_batch_idx]
                         pred = programs_output_pred[:, true_batch_idx]
                         pred_sent, _ = GQATorchDataset.indices_to_string(pred, True)
                         gt_sent, _ = GQATorchDataset.indices_to_string(gt, True)
@@ -863,12 +898,12 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
             if DUMP_RESULT:
 
                 short_answer_pred_score, short_answer_pred_label = short_answer_logits.max(1)
-                short_answer_pred_score, short_answer_pred_label = short_answer_pred_score.cpu(), short_answer_pred_label.cpu()
+                short_answer_pred_score, short_answer_pred_label = short_answer_pred_score, short_answer_pred_label.cpu()
                 for batch_idx in range( this_batch_size ):
                     ##################################
                     # print Question and Question ID
                     ##################################
-                    question = questions[:, batch_idx].cpu()
+                    question = questions[:, batch_idx]
                     question_sent, _ = GQATorchDataset.indices_to_string(question, True)
 
                     ##################################
@@ -878,7 +913,7 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
                     predicted_program_list = []
                     for instr_idx in range(GQATorchDataset.MAX_EXECUTION_STEP):
                         true_batch_idx = instr_idx + GQATorchDataset.MAX_EXECUTION_STEP * batch_idx
-                        gt = programs[:, true_batch_idx].cpu()
+                        gt = programs[:, true_batch_idx]
                         pred = programs_output_pred[:, true_batch_idx]
                         pred_sent, _ = GQATorchDataset.indices_to_string(pred, True)
                         gt_sent, _ = GQATorchDataset.indices_to_string(gt, True)
@@ -909,10 +944,10 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
                         "question": question_sent,
                         "ground_truth_program_list": ground_truth_program_list,
                         "predicted_program_list": predicted_program_list,
-                        "answer": GQATorchDataset.label2ans[short_answer_label[batch_idx].cpu().item()],
+                        "answer": GQATorchDataset.label2ans[short_answer_label[batch_idx].item()],
                         # predicted short answer
-                        "prediction": GQATorchDataset.label2ans[short_answer_pred_label[batch_idx].cpu().item()],
-                        "prediction_score": '{:.2f}'.format(short_answer_pred_score[batch_idx].cpu().item()),
+                        "prediction": GQATorchDataset.label2ans[short_answer_pred_label[batch_idx].item()],
+                        "prediction_score": '{:.2f}'.format(short_answer_pred_score[batch_idx].item()),
                         "types": types[batch_idx],
                     }
 
