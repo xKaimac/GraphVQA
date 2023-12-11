@@ -59,13 +59,15 @@ Our code is available at https://github.com/codexxxl/GraphVQA*
 ## Usage
 ### 0. Dependencies
 
-Create a `conda` environment with `python` version = 3.6
+Create a `conda` environment with `python` version = 3.8
 
 #### 0.1. Install torchtext, spacy
 Run following commands in the created `conda` environment
-(Note: torchtext requires version: torchtext<0.9.0)
+(Note: torchtext requires version: torchtext<0.9.0.
+This will require a suitable version of torch+cuda that will support this old version of torchtext. 
+For the hardware I have access to, this combintation is torch 1.7.1+cu110)
 ```
-conda install -c pytorch torchtext
+conda install -c pytorch torchtext==1.8.1
 conda install -c conda-forge spacy
 conda install -c conda-forge cupy
 python -m spacy download en_core_web_sm
@@ -82,13 +84,15 @@ nltk.download('wordnet')
 Follow the link below to install PyTorch Geometric via binaries: 
 https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html#installation-via-binaries
 
-Example installation commands with `PyTorch 1.4.0` and `CUDA 10.0`: (Note you need to replace `torch-1.4.0+cu100` field with your own installed `PyTorch` and `CUDA` versions.)
+Torch Geometric 1.7.0 is required for the hardware and package combinations that I am using, use the appropriate version that works for you.
+
+Example installation commands with `PyTorch 1.7.1` and `CUDA 11.0.2`: (Note you need to replace `torch-1.7.1+cu110` field with your own installed `PyTorch` and `CUDA` versions.)
 ```
-pip install --no-index torch-scatter -f https://pytorch-geometric.com/whl/torch-1.4.0+cu100.html
-pip install --no-index torch-sparse -f https://pytorch-geometric.com/whl/torch-1.4.0+cu100.html
-pip install --no-index torch-cluster -f https://pytorch-geometric.com/whl/torch-1.4.0+cu100.html
-pip install --no-index torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.4.0+cu100.html
-pip install torch-geometric
+pip install --no-index torch-scatter -f https://pytorch-geometric.com/whl/torch-1.7.1+cu110.html
+pip install --no-index torch-sparse -f https://pytorch-geometric.com/whl/torch-1.7.1+cu110.html
+pip install --no-index torch-cluster -f https://pytorch-geometric.com/whl/torch-1.7.1+cu110.html
+pip install --no-index torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.7.1+cu110.html
+pip install torch-geometric==1.7.0
 ```
 
 
