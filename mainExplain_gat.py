@@ -247,7 +247,7 @@ def main(args):
             load_vocab_flag=args.evaluate
         ))
     val_dataset = torch.utils.data.ConcatDataset(val_dataset_list)
-
+    print("VAL_DATASET = {}".format(val_dataset))
     if args.distributed:
         sampler_val = torch.utils.data.DistributedSampler(val_dataset, shuffle=False)
     else:
@@ -355,7 +355,9 @@ def main(args):
     ##################################
 
     if args.evaluate:
+        print("I MADE IT TO LINE 359 (ARGS.EVALUATE)")
         validate(val_loader, model, criterion, args, DUMP_RESULT=True)
+        print("I'm past the validate()")
         return
 
     ##################################
@@ -730,8 +732,12 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
         prefix='Test: '
     )
 
+    print("progress has been defined on line 723")
+
     # switch to evaluate mode
     model.eval()
+
+    print("model has been switched to eval mode")
 
     if DUMP_RESULT:
         quesid2ans = {}
@@ -739,8 +745,10 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
     with torch.no_grad():
         end = time.time()
         for i, (data_batch) in enumerate(val_loader):
-
+            print("In loop {} at line 742".format(i))
             questionID, questions, gt_scene_graphs, programs, full_answers, short_answer_label, types = data_batch
+
+            print("questions and stuff have been defined")
 
             questions, gt_scene_graphs, programs, full_answers, short_answer_label = [
                 datum.to(device=cuda, non_blocking=True) for datum in [
@@ -748,7 +756,11 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
                 ]
             ]
 
+            print("datum.to finished")
+
             this_batch_size = questions.size(1)
+
+            print("this_batch_size defined")
 
             if FAST_VALIDATE_FLAG:
                 raise NotImplementedError("Should not use fast validation. Only for short answer accuracy")
@@ -785,8 +797,11 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
             else:
 
                 programs_target = programs
+
+                print("programs_target defined")
                 full_answers_target = full_answers
 
+                print("full_answers_target defined")
                 ##################################
                 # Greedy decoding-based evaluation
                 ##################################
@@ -797,8 +812,9 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
                     None,
                     SAMPLE_FLAG=True
                 )
+                print("output defined")
                 programs_output_pred,  short_answer_logits = output
-
+                print("other stuff for output defined")
             ##################################
             # Neural Execution Engine Bitmap loss
             # ground truth stored at gt_scene_graphs.y
@@ -816,16 +832,20 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
             ##################################
             this_short_answer_acc1 = accuracy(short_answer_logits.detach(), short_answer_label, topk=(1,))
             short_answer_acc.update(this_short_answer_acc1[0].item(), this_batch_size)
-
+            print("short answer stuff defined")
             text_pad_idx = GQATorchDataset.TEXT.vocab.stoi[GQATorchDataset.TEXT.pad_token]
+            print("text_pad_idx defined")
             this_program_acc, this_program_group_acc, this_program_non_empty_acc = program_string_exact_match_acc(
                 programs_output_pred, programs_target,
                 padding_idx=text_pad_idx,
                 group_accuracy_WAY_NUM=GQATorchDataset.MAX_EXECUTION_STEP
             )
+            print("program stuff defined")
             program_acc.update(this_program_acc, this_batch_size)
             program_group_acc.update(this_program_group_acc, this_batch_size // GQATorchDataset.MAX_EXECUTION_STEP)
             program_non_empty_acc.update(this_program_non_empty_acc, this_batch_size)
+
+            print("accuracy updates @ line 828")
 
             # this_full_answers_acc = string_exact_match_acc(
             #     full_answers_output_pred.detach(), full_answers_target, padding_idx=text_pad_idx
