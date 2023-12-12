@@ -103,7 +103,8 @@ class GQA_gt_sg_feature_lookup:
             sg_datum = torch_geometric.data.Data(
                 x = torch.zeros((1, 12)),
                 edge_index = torch.zeros((2, 0), dtype = torch.long),
-                edge_attr = torch.zeros((0, 1))
+                edge_attr = torch.zeros((0, 1)),
+                added_sym_edge = torch.tensor([], dtype = torch.long)
             )
             # self.create_mummy_scene_graph()
         else:
@@ -143,7 +144,7 @@ class GQA_gt_sg_feature_lookup:
 
         return sg_datum
 
-    def create_dummy_scene_graph():
+    def create_mummy_scene_graph():
         num_node_features = 12
         num_edge_features = 1
 
@@ -572,7 +573,7 @@ class GQATorchDataset(torch.utils.data.Dataset):
             program_text_tokenized = datum[6]
             full_answer_text = datum[5]
             # Question
-            # must do preprocess (tokenization) before doing the build vocab
+            # must do preprocess (tokenization) before doing the buld vocab
             question_text_tokenized = GQATorchDataset.TEXT.preprocess(question_text)
             tmp_text_list.append(question_text_tokenized)
             # Program
