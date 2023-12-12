@@ -70,7 +70,17 @@ For the hardware I have access to, this combintation is torch 1.7.1+cu110)
 conda install -c pytorch torchtext==1.8.1
 conda install -c conda-forge spacy
 conda install -c conda-forge cupy
-python -m spacy download en_core_web_sm
+```
+Next, run ```python``` in the terminal and download en_core_web_sm like so. Running the single line command ```python -m spacy download en_core_web_sm``` doesn't work with the dependency versions we are using.
+```
+import torch
+import spacy.cli
+
+spacy.cli.download("en_core_web_sm")
+```
+
+
+```
 conda install -c anaconda nltk
 ```
 
