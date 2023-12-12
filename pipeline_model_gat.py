@@ -301,7 +301,7 @@ class PositionalEncoding(torch.nn.Module):
         self.dropout = torch.nn.Dropout(p=dropout)
 
         pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        position = torch.arange(0, max_len, dtype=torch.long).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
@@ -575,12 +575,13 @@ class GroundTruth_SceneGraph_Encoder(torch.nn.Module):
     def forward(self,
                 gt_scene_graphs,
                 ):
-
+        if gt_scene_graphs is not None and gt_scene_graphs.edge_attr.dtype != torch.long:
+            gt_scene_graphs.edge_attr = gt_scene_graphs.edge_attr.long()
         ##################################
         # Use glove embedding to embed ground truth scene graph
         ##################################
         # [ num_nodes, MAX_OBJ_TOKEN_LEN] -> [ num_nodes, MAX_OBJ_TOKEN_LEN, sg_emb_dim]
-        x_embed     = self.sg_vocab_embedding(gt_scene_graphs.x)
+        x_embed     = self.sg_vocab_embedding(gt_scene_graphs.x.long())
         # [ num_nodes, MAX_OBJ_TOKEN_LEN, sg_emb_dim] -> [ num_nodes, sg_emb_dim]
         x_embed_sum = torch.sum(input=x_embed, dim=-2, keepdim=False)
         # [ num_edges, MAX_EDGE_TOKEN_LEN] -> [ num_edges, MAX_EDGE_TOKEN_LEN, sg_emb_dim]
@@ -615,12 +616,13 @@ The whole Pipeline. put everything here
 class PipelineModel(torch.nn.Module):
     def __init__(self):
         super(PipelineModel, self).__init__()
+        print("innit bruv (line 615)")
 
         ##################################
         # build scene graph encoder
         ##################################
         self.scene_graph_encoder = GroundTruth_SceneGraph_Encoder()
-
+        print("scene_graph_encoder set up")
 
         ##################################
         # build text embedding
@@ -747,9 +749,11 @@ class PipelineModel(torch.nn.Module):
                 full_answers_input=None,
                 SAMPLE_FLAG=False,
                 ):
-
-        x_encoded, edge_attr_encoded, _ = self.scene_graph_encoder(gt_scene_graphs)
-
+        
+        if gt_scene_graphs is not None:
+            x_encoded, edge_attr_encoded, _ = self.scene_graph_encoder(gt_scene_graphs)
+        else:
+            x_encoded = None
         ##################################
         # Encode questions
         ##################################
@@ -895,8 +899,5 @@ if __name__ == "__main__":
         )
 
         print("model output:", output)
-
-
-
 
         break
