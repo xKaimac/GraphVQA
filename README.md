@@ -67,7 +67,7 @@ Run following commands in the created `conda` environment
 This will require a suitable version of torch+cuda that will support this old version of torchtext. 
 For the hardware I have access to, this combintation is torch 1.7.1+cu110)
 ```
-conda install -c pytorch torchtext==1.8.1
+conda install -c pytorch torchtext==0.8.1
 conda install -c conda-forge spacy
 conda install -c conda-forge cupy
 ```
