@@ -742,9 +742,9 @@ class PipelineModel(torch.nn.Module):
 
     def forward(self,
                 questions,
-                gt_scene_graphs,
-                programs_input,
-                full_answers_input,
+                gt_scene_graphs=None,
+                programs_input=None,
+                full_answers_input=None,
                 SAMPLE_FLAG=False,
                 ):
 
