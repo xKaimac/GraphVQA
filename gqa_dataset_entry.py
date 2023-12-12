@@ -98,9 +98,17 @@ class GQA_gt_sg_feature_lookup:
     def query_and_translate(self, queryID: str, new_execution_buffer: list):
         ##################################
         # handle scene graph part
-        ##################################
-        sg_this = self.sg_json_data[queryID]
-        sg_datum = self.convert_one_gqa_scene_graph(sg_this)
+        #################################
+        if self.sg_json_data is None or queryID not in self.sg_json_data:
+            sg_datum = torch_geometric.data.Data(
+                x = torch.zeros((1, 12)),
+                edge_index = torch.zeros((2, 0), dtype = torch.long),
+                edge_attr = torch.zeros((0, 1))
+            )
+            # self.create_mummy_scene_graph()
+        else:
+            sg_this = self.sg_json_data[queryID]
+            sg_datum = self.convert_one_gqa_scene_graph(sg_this)
 
         ##################################
         # Do translation for target object IDs in th execution buffer
@@ -134,6 +142,17 @@ class GQA_gt_sg_feature_lookup:
         sg_datum.y = execution_bitmap
 
         return sg_datum
+
+    def create_dummy_scene_graph():
+        num_node_features = 12
+        num_edge_features = 1
+
+        dummy_datum = torch_geometric.data.Data(
+            x = torch.zeros((1, num_node_features)), 
+            edge_index = torch.zeros((2, 0), dtype = torch.long),
+            edge_attr = torch.zeros((0, num_edge_features))
+        )
+        return dummy_datum
 
     def build_scene_graph_encoding_vocab(self):
         """
@@ -553,7 +572,7 @@ class GQATorchDataset(torch.utils.data.Dataset):
             program_text_tokenized = datum[6]
             full_answer_text = datum[5]
             # Question
-            # must do preprocess (tokenization) before doing the buld vocab
+            # must do preprocess (tokenization) before doing the build vocab
             question_text_tokenized = GQATorchDataset.TEXT.preprocess(question_text)
             tmp_text_list.append(question_text_tokenized)
             # Program
