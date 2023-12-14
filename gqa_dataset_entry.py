@@ -90,9 +90,10 @@ class GQA_gt_sg_feature_lookup:
 
             elif split == 'testdev':
                 ##################################
-                # We do not have ground truth scene graph for testdev
+                # predictions for the test set generated from https://github.com/bknyaz/sgg/blob/master/Scene_Graph_Predictions_GQA.ipynb
                 ##################################
-                self.sg_json_data = None
+                with open(SCENEGRAPHS / 'test_sceneGraphs.json') as f:
+                    self.sg_json_data = json.load(f)
 
 
     def query_and_translate(self, queryID: str, new_execution_buffer: list):
