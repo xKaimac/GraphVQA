@@ -1,19 +1,14 @@
 """
-
 File Name: main.py
 
 Single GPU training: 
 CUDA_VISIBLE_DEVICES=2 python mainExplain.py --log-name debug.log && echo 'Ground Truth Scene Graph Debug'
-
-
-
 
 Distributed Training:
 CUDA_VISIBLE_DEVICES=0,1,2,7 python -m torch.distributed.launch --nproc_per_node=4 --use_env mainExplain.py
 
 Kill Distributed:
 kill $(ps aux | grep mainExplain.py | grep -v grep | awk '{print $2}')
-
 
 Do Evaluation:
 # Calculate model accuracy (program, short, and full) on val set
@@ -22,13 +17,11 @@ CUDA_VISIBLE_DEVICES=3 python mainExplain.py \
     --evaluate \
     --resume ./gtsg_large_cap_outputdir/checkpoint0029.pth && echo 'test dump '
 
-
 on testdev set
 CUDA_VISIBLE_DEVICES=2 python /home/ubuntu/GQA/DialogGQA/GraphVQA-master/mainExplain.py \
     --evaluate \
     --evaluate_sets testdev \
     --resume ./gtsg_large_cap_outputdir/checkpoint0029.pth
-
 """
 import torch
 import argparse
@@ -68,27 +61,19 @@ def get_args_parser():
                         help='path to dataset')
     parser.add_argument('--save-dir', metavar='PATH', default='./',
                         help='path to dataset')
-    # parser.add_argument('--log-name', default='tmp.log', type=str, metavar='PATH',
-    # parser.add_argument('--log-name', default='detrDEBUG.log', type=str, metavar='PATH',
-    # parser.add_argument('--log-name', default='detr.log', type=str, metavar='PATH',
-    # parser.add_argument('--log-name', default='detrDEV.log', type=str, metavar='PATH',
     parser.add_argument('--log-name', default='gtsg.log', type=str, metavar='PATH',
                         help='path to the log file (default: output.log)')
-    # parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
     parser.add_argument('-j', '--workers', default=16, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
     parser.add_argument('--epochs', default=300, type=int, metavar='N',
                         help='number of total epochs to run')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
-    # parser.add_argument('-b', '--batch-size', default=1024, type=int,
-    # parser.add_argument('-b', '--batch-size', default=512, type=int,
     parser.add_argument('-b', '--batch-size', default=256, type=int,
                         metavar='N',
                         help='mini-batch size (default: 256), this is the total '
                              'batch size of all GPUs on the current node when '
                              'using Data Parallel or Distributed Data Parallel')
-    # parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float,
     parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float,
                         metavar='LR', help='initial learning rate', dest='lr')
     parser.add_argument('--lr_drop', default=30, type=int)
@@ -97,7 +82,6 @@ def get_args_parser():
     parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)',
                         dest='weight_decay')
-    # parser.add_argument('-p', '--print-freq', default=1, type=int,
     parser.add_argument('-p', '--print-freq', default=50, type=int,
                         metavar='N', help='print frequency (default: 10)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -108,25 +92,16 @@ def get_args_parser():
                         help='Data sets/splits to perform evaluation, e.g. '
                              'val_unbiased, testdev etc. Multiple sets/splits '
                              'are supported and need to be separated by space')
-    # parser.add_argument('--seed', default=1234, type=int,
     parser.add_argument('--seed', default=None, type=int,
                         help='seed for initializing training. ')
-    # parser.add_argument('--multiprocessing-distributed', action='store_true',
-    #                     help='Use multi-processing distributed training to launch '
-    #                         'N processes per node, which has N GPUs. This is the '
-    #                         'fastest way to use PyTorch for either single node or '
-    #                         'multi node data parallel training')
-
     parser.add_argument('--output_dir', default='./outputdir',
                         help='path where to save, empty for no saving')
-
     # distributed training parameters
     parser.add_argument('--world_size', default=1, type=int,
                         help='number of distributed processes')
     parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
 
     return parser
-
 
 """
 Seems equivalent to
@@ -135,22 +110,15 @@ torch.optim.lr_scheduler.StepLR(optimizer, step_size, gamma=0.1, last_epoch=-1)
 def adjust_learning_rate(optimizer, epoch, args):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     lr = args.lr * (0.1 ** (epoch // 30))
-    # lr = args.lr * (0.1 ** (epoch // 15)) # experimenting to speed up convergence
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')
 
-
-# def main():
-#     args = parser.parse_args()
-
 def main(args):
-    # args = parser.parse_args()
     utils.init_distributed_mode(args)
     print("git:\n  {}\n".format(utils.get_sha()))
     print(args)
@@ -175,8 +143,6 @@ def main(args):
     )
 
     if args.seed is not None:
-        # random.seed(args.seed)
-        # torch.manual_seed(args.seed)
         cudnn.deterministic = True
         warnings.warn('You have chosen to seed training. '
                       'This will turn on the CUDNN deterministic setting, '
@@ -210,7 +176,6 @@ def main(args):
     ##################################
     # Initialize dataset
     ##################################
-
     if not args.evaluate:
         # build_vocab_flag=True, # Takes a long time to build a vocab
         train_dataset = GQATorchDataset(
@@ -232,12 +197,6 @@ def main(args):
             collate_fn=GQATorchDataset_collate_fn,
             num_workers=args.workers
         )
-
-        # Old version
-        # train_loader = torch.utils.data.DataLoader(
-        #     train_dataset, batch_size=args.batch_size, shuffle=True,
-        #     collate_fn=GQATorchDataset_collate_fn,
-        #     num_workers=args.workers, pin_memory=True)
 
     val_dataset_list = []
     for eval_split in args.evaluate_sets:
@@ -262,13 +221,6 @@ def main(args):
         num_workers=args.workers
     )
 
-    # Old version
-    # val_loader = torch.utils.data.DataLoader(
-    #     val_dataset,
-    #     batch_size=args.batch_size, shuffle=False,
-    #     collate_fn=GQATorchDataset_collate_fn,
-    #     num_workers=args.workers, pin_memory=True)
-
     ##################################
     # Initialize model
     # - note: must init dataset first. Since we will use the vocab from the dataset
@@ -292,10 +244,6 @@ def main(args):
     ##################################
     # define optimizer (and scheduler)
     ##################################
-
-    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
-    #                             momentum=args.momentum,
-    #                             weight_decay=args.weight_decay)
     optimizer = torch.optim.Adam(
         params=model.parameters(),
         lr=args.lr,
@@ -304,10 +252,6 @@ def main(args):
         weight_decay=0, #  weight_decay=args.weight_decay
         amsgrad=False,
     )
-    # optimizer = torch.optim.AdamW(
-    #     params=model.parameters(),
-    #     lr=args.lr,
-    #     weight_decay=args.weight_decay)
 
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
 
@@ -324,13 +268,6 @@ def main(args):
                     lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
                 if 'epoch' in checkpoint:
                     args.start_epoch = checkpoint['epoch'] + 1
-
-            # checkpoint = torch.load(args.resume)
-            # args.start_epoch = checkpoint['epoch']
-            # model.load_state_dict(checkpoint['state_dict'])
-            # optimizer.load_state_dict(checkpoint['optimizer'])
-            # print("=> loaded checkpoint '{}' (epoch {})"
-            #       .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
@@ -339,14 +276,11 @@ def main(args):
     ##################################
     # Define loss functions (criterion)
     ##################################
-    # criterion = torch.nn.CrossEntropyLoss().cuda()
-
     text_pad_idx = GQATorchDataset.TEXT.vocab.stoi[GQATorchDataset.TEXT.pad_token]
     criterion = {
         "program": torch.nn.CrossEntropyLoss(ignore_index=text_pad_idx).to(device=cuda),
         "full_answer": torch.nn.CrossEntropyLoss(ignore_index=text_pad_idx).to(device=cuda),
         "short_answer": torch.nn.CrossEntropyLoss().to(device=cuda),
-        # "short_answer": torch.nn.BCEWithLogitsLoss().to(device=cuda), # sigmoid
         "execution_bitmap": torch.nn.BCELoss().to(device=cuda),
     }
     
@@ -376,22 +310,12 @@ def main(args):
 
         lr_scheduler.step()
 
-        # adjust_learning_rate(optimizer, epoch, args)
-
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch, args)
+
         # evaluate on validation set
         if (epoch + 1) % 5 == 0:
             validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False)
-
-        # # remember best acc@1 and save checkpoint
-        # save_checkpoint({
-        #     'epoch': epoch + 1,
-        #     # 'arch': args.arch,
-        #     'state_dict': model.state_dict(),
-        #     # 'best_acc1': best_acc1,
-        #     'optimizer' : optimizer.state_dict(),
-        # }, is_best)
 
         if args.output_dir:
             output_dir = pathlib.Path(args.output_dir)
@@ -411,9 +335,6 @@ def main(args):
     wandb.finish()
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
-    # batch_time = AverageMeter('Time', ':6.3f')
-    # data_time = AverageMeter('Data', ':6.3f')
-    # losses = AverageMeter('Loss', ':.4e')
     batch_time = AverageMeter('Time', ':4.2f')
     data_time = AverageMeter('Data', ':4.2f')
     losses = AverageMeter('Loss', ':.2e')
@@ -421,11 +342,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     program_acc = AverageMeter('Acc@Program', ':4.2f')
     program_group_acc = AverageMeter('Acc@ProgramGroup', ':4.2f')
     program_non_empty_acc = AverageMeter('Acc@ProgramNonEmpty', ':4.2f')
-
-    # bitmap_precision = AverageMeter('Precision@Bitmap', ':4.2f')
-    # bitmap_recall = AverageMeter('Recall@Bitmap', ':4.2f')
-
-    # full_answer_acc = AverageMeter('Acc@Full', ':4.2f')
     short_answer_acc = AverageMeter('Acc@Short', ':4.2f')
 
     progress = ProgressMeter(
@@ -454,7 +370,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         ]
 
         this_batch_size = questions.size(1)
-        # print("this_batch_size", this_batch_size, "data_batch", data_batch)
 
         ##################################
         # Prepare training input and training target for text generation
@@ -464,15 +379,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         programs_target = programs[1:]
         full_answers_input = full_answers[:-1]
         full_answers_target = full_answers[1:]
-        # print("programs_input.size()", programs_input.size())
-        # print("programs_target.size()", programs_target.size())
-        # print("full_answers_input.size()", full_answers_input.size())
-        # print("full_answers_target.size()", full_answers_target.size())
-
-        # print("programs_input", programs_input)
-        # print("programs_target", programs_target)
-        # print("full_answers_input", full_answers_input)
-        # print("full_answers_target", full_answers_target)
 
         ##################################
         # Forward training data
@@ -504,9 +410,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
             programs_output_pred = programs_output.detach().topk(
                 k=1, dim=-1, largest=True, sorted=True
             )[1].squeeze(-1)
-            # full_answers_output_pred = full_answers_output.detach().topk(
-            #     k=1, dim=-1, largest=True, sorted=True
-            # )[1].squeeze(-1)
 
             this_program_acc, this_program_group_acc, this_program_non_empty_acc = program_string_exact_match_acc(
                 programs_output_pred, programs_target,
@@ -515,26 +418,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
             program_acc.update(this_program_acc, this_batch_size)
             program_group_acc.update(this_program_group_acc, this_batch_size // GQATorchDataset.MAX_EXECUTION_STEP)
             program_non_empty_acc.update(this_program_non_empty_acc, this_batch_size)
-
-            # this_full_answers_acc = string_exact_match_acc(
-            #     full_answers_output_pred, full_answers_target, padding_idx=text_pad_idx
-            # )
-            # full_answer_acc.update(this_full_answers_acc, this_batch_size)
-
-        ##################################
-        # Neural Execution Engine Bitmap loss
-        # ground truth stored at gt_scene_graphs.y
-        # using torch.nn.BCELoss - torch.nn.functional.binary_cross_entropy
-        # should also add a special precision recall for that
-        ##################################
-        # execution_bitmap_loss = criterion['execution_bitmap'](execution_bitmap, gt_scene_graphs.y)
-
-        # precision, precision_div, recall, recall_div = bitmap_precision_recall(
-        #     execution_bitmap, gt_scene_graphs.y, threshold=0.5
-        # )
-
-        # bitmap_precision.update(precision, precision_div)
-        # bitmap_recall.update(recall, recall_div)
 
         ##################################
         # Calculate each module's loss and get global loss
@@ -545,18 +428,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
             target = target.contiguous().view(-1)
             this_text_loss = loss_fn(output, target)
             return this_text_loss
-
-        # program_loss = text_generation_loss(criterion['program'], programs_output, programs_target)
-        # full_answer_loss = text_generation_loss(
-        #     criterion['full_answer'], full_answers_output, full_answers_target
-        # )
-
-        ##################################
-        # using sigmoid loss for short answer
-        ##################################
-        # num_short_answer_choices = 1842
-        # short_answer_label_one_hot = torch.nn.functional.one_hot(short_answer_label, num_short_answer_choices).float()
-        # short_answer_loss = criterion['short_answer'](short_answer_logits, short_answer_label_one_hot) # sigmoid loss
 
         ##################################
         # normal softmax loss for short answer
@@ -600,7 +471,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     ##################################
     progress.display(batch=len(train_loader))
 
-
 """
 Input shape: [Len, Batch]
 A fast GPU-based string exact match accuracy calculator
@@ -619,9 +489,7 @@ def string_exact_match_acc(predictions, target, padding_idx=1):
     # truncated
     predictions = predictions[:target_len]
     char_match_matrix = (predictions == target).long()
-    # print("char_match_matrix", char_match_matrix)
     cond_match_matrix = torch.where(target == padding_idx, torch.ones_like(target), char_match_matrix)
-    # print("cond_match_matrix", cond_match_matrix)
     del char_match_matrix
 
     ##################################
@@ -631,14 +499,10 @@ def string_exact_match_acc(predictions, target, padding_idx=1):
     ##################################
     # ret: (values, indices)
     match_reduced, _ = torch.min(input=cond_match_matrix, dim=0, keepdim=False)
-    # print("match_reduced", match_reduced)
     this_batch_size = target.size(1)
-    # print("this_batch_size", this_batch_size)
-    # mul 100, converting to percentage
     accuracy = torch.sum(match_reduced).item() / this_batch_size * 100.0
 
     return accuracy
-
 
 """
 Input shape: [Len, Batch]
@@ -681,10 +545,8 @@ def program_string_exact_match_acc(predictions, target, padding_idx=1, group_acc
     ##################################
     group_batch_size = this_batch_size // group_accuracy_WAY_NUM
     match_reduced_group_reshape = match_reduced.view(group_batch_size, group_accuracy_WAY_NUM)
-    # print("match_reduced_group_reshape", match_reduced_group_reshape)
     # ret: (values, indices)
     group_match_reduced, _ = torch.min(input=match_reduced_group_reshape, dim=1, keepdim=False)
-    # print("group_match_reduced", group_match_reduced)
     # mul 100, converting to percentage
     group_accuracy = torch.sum(group_match_reduced).item() / group_batch_size * 100.0
 
@@ -696,9 +558,7 @@ def program_string_exact_match_acc(predictions, target, padding_idx=1, group_acc
     # empty and counted as correct
     empty_instr_flag = (target[2] == padding_idx) & match_reduced.bool()
     empty_instr_flag = empty_instr_flag.long()
-    # print("empty_instr_flag", empty_instr_flag)
     empty_count = torch.sum(empty_instr_flag).item()
-    # print("empty_count", empty_count)
     non_empty_accuracy = (torch.sum(match_reduced).item() - empty_count) / (this_batch_size - empty_count) * 100.0
 
     ##################################
@@ -706,18 +566,12 @@ def program_string_exact_match_acc(predictions, target, padding_idx=1, group_acc
     ##################################
     return accuracy, group_accuracy , non_empty_accuracy
 
-
 def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_RESULT=False):
     batch_time = AverageMeter('Time', ':6.3f')
 
     program_acc = AverageMeter('Acc@Program', ':6.2f')
     program_group_acc = AverageMeter('Acc@ProgramGroup', ':4.2f')
     program_non_empty_acc = AverageMeter('Acc@ProgramNonEmpty', ':4.2f')
-
-    # bitmap_precision = AverageMeter('Precision@Bitmap', ':4.2f')
-    # bitmap_recall = AverageMeter('Recall@Bitmap', ':4.2f')
-
-    # full_answer_acc = AverageMeter('Acc@Full', ':6.2f')
     short_answer_acc = AverageMeter('Acc@Short', ':6.2f')
 
     progress = ProgressMeter(
@@ -786,7 +640,7 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
 
                 programs_target = programs
                 full_answers_target = full_answers
-
+                print("I KNOW THAT I CAN GET HERE")
                 ##################################
                 # Greedy decoding-based evaluation
                 ##################################
@@ -826,6 +680,13 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
             program_acc.update(this_program_acc, this_batch_size)
             program_group_acc.update(this_program_group_acc, this_batch_size // GQATorchDataset.MAX_EXECUTION_STEP)
             program_non_empty_acc.update(this_program_non_empty_acc, this_batch_size)
+
+            wandb.log({
+                "Short Answer Accuracy": short_answer_acc.avg,
+                "Program Accuracy": program_acc.avg,
+                "Program Group Accuracy": program_group_acc.avg,
+                "Program Non-Empty Accuracy": program_non_empty_acc.avg
+            })
 
             # this_full_answers_acc = string_exact_match_acc(
             #     full_answers_output_pred.detach(), full_answers_target, padding_idx=text_pad_idx
@@ -979,7 +840,6 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
 
     return
 
-
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 
@@ -1004,7 +864,6 @@ class AverageMeter(object):
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
         return fmtstr.format(**self.__dict__)
 
-
 class ProgressMeter(object):
     def __init__(self, num_batches, meters, prefix=""):
         self.batch_fmtstr = self._get_batch_fmtstr(num_batches)
@@ -1027,7 +886,6 @@ class ProgressMeter(object):
         fmt = '{:' + str(num_digits) + 'd}'
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
 
-
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
@@ -1043,7 +901,6 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
-
 
 def bitmap_precision_recall(output, target, threshold=0.5):
     """ Computes the precision recall over execution bitmap given a interpretation threshold """
@@ -1075,7 +932,6 @@ def bitmap_precision_recall(output, target, threshold=0.5):
         recall_div = 1e-6 if recall_div == 0 else recall_div
 
         return precision, precision_div, recall, recall_div
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Explainable GQA training and evaluation script',
