@@ -33,7 +33,7 @@ EXPLAINABLE_GQA_DIR = ROOT_DIR.joinpath('GraphVQA')
 SPLIT_TO_H5_PATH_TABLE = {
     'train_unbiased': '/home/ubuntu/GQA/objectDetection/extract/save_train_feature.h5',
     'val_unbiased': '/home/ubuntu/GQA/objectDetection/extract/save_test_feature.h5',
-    'testdev': '/home/ubuntu/GQA/objectDetection/extract/testdev_feature.h5',
+    'testdev': '/home/ubuntu/GQA/objectDetection/extract/save_testdev_feature.h5',
     'debug': '/home/ubuntu/GQA/objectDetection/extract/save_train_feature.h5',
 }
 SPLIT_TO_MODE_TABLE = {
@@ -100,17 +100,9 @@ class GQA_gt_sg_feature_lookup:
         ##################################
         # handle scene graph part
         #################################
-        if self.sg_json_data is None or queryID not in self.sg_json_data:
-            sg_datum = torch_geometric.data.Data(
-                x = torch.zeros((1, 12)),
-                edge_index = torch.zeros((2, 0), dtype = torch.long),
-                edge_attr = torch.zeros((0, 1)),
-                added_sym_edge = torch.tensor([], dtype = torch.long)
-            )
-            # self.create_mummy_scene_graph()
-        else:
-            sg_this = self.sg_json_data[queryID]
-            sg_datum = self.convert_one_gqa_scene_graph(sg_this)
+
+        sg_this = self.sg_json_data[queryID]
+        sg_datum = self.convert_one_gqa_scene_graph(sg_this)
 
         ##################################
         # Do translation for target object IDs in th execution buffer
@@ -119,13 +111,13 @@ class GQA_gt_sg_feature_lookup:
         ##################################
 
         execution_bitmap = torch.zeros(
-            (sg_datum.num_nodes, GQATorchDataset.MAX_EXECUTION_STEP),
+            (sg_datum.num_nodes, GQATorchDatasetVal.MAX_EXECUTION_STEP),
             dtype=torch.float32
         )
         instr_annotated_len = min(
-            len(new_execution_buffer), GQATorchDataset.MAX_EXECUTION_STEP
+            len(new_execution_buffer), GQATorchDatasetVal.MAX_EXECUTION_STEP
         )
-        padding_len = GQATorchDataset.MAX_EXECUTION_STEP - instr_annotated_len
+        padding_len = GQATorchDatasetVal.MAX_EXECUTION_STEP - instr_annotated_len
 
         ##################################
         # Build Bitmap based on instructions
@@ -145,7 +137,7 @@ class GQA_gt_sg_feature_lookup:
 
         return sg_datum
 
-    def create_mummy_scene_graph():
+    def create_dummy_scene_graph():
         num_node_features = 12
         num_edge_features = 1
 
@@ -535,6 +527,7 @@ class GQATorchDataset(torch.utils.data.Dataset):
         # handle scene graph part
         ##################################
         queryID = str(imageId)
+        # if image id not in list, return none?
         # sg_datum = self.sg_feature_lookup.query(queryID)
         sg_datum = self.sg_feature_lookup.query_and_translate(queryID, new_execution_buffer) #, fetched_datum=datum)
 
@@ -574,7 +567,7 @@ class GQATorchDataset(torch.utils.data.Dataset):
             program_text_tokenized = datum[6]
             full_answer_text = datum[5]
             # Question
-            # must do preprocess (tokenization) before doing the buld vocab
+            # must do preprocess (tokenization) before doing the build vocab
             question_text_tokenized = GQATorchDataset.TEXT.preprocess(question_text)
             tmp_text_list.append(question_text_tokenized)
             # Program
@@ -648,6 +641,256 @@ class GQATorchDataset(torch.utils.data.Dataset):
     },
 """
 
+class GQATorchDatasetVal(torch.utils.data.Dataset):
+
+    ##################################
+    # common config for QA part
+    ##################################
+    # MAX_EXECUTION_STEP = 9 # strict 9
+    # strict 9
+    MAX_EXECUTION_STEP = 5
+
+    # QA vocab: to preprocess and numerlicalize text
+    TEXT = torchtext.data.Field(sequential=True,
+                                tokenize="spacy",
+                                init_token="<start>",
+                                eos_token="<end>",
+                                tokenizer_language='en_core_web_sm',
+                                # include_lengths=True,
+                                include_lengths=False,
+                                # Whether to produce tensors with the batch dimension first.
+                                batch_first=False)
+
+    ##################################
+    # Init class-level var
+    # Prepare short answer vocab
+    # read only for using self.XXX to access
+    ##################################
+    # with open(ROOT_DIR / 'GraphVQA/meta_info/GQA_plural_answer.json') as infile:
+    #     answer_plural_inv_map = json.load(infile)
+    with open(ROOT_DIR / 'GraphVQA/meta_info/trainval_ans2label.json') as infile:
+        ans2label = json.load(infile)
+    with open(ROOT_DIR / 'GraphVQA/meta_info/trainval_label2ans.json') as infile:
+        label2ans = json.load(infile)
+    assert len(ans2label) == len(label2ans)
+    for ans, label in ans2label.items():
+        assert label2ans[label] == ans
+
+    def __init__(
+            self,
+            split,
+            build_vocab_flag=False,
+            load_vocab_flag=False
+    ):
+
+        self.split = split
+        assert split in SPLIT_TO_H5_PATH_TABLE
+
+        ##################################
+        # Prepare scene graph loader (Ground Truth loader or DETR feature loader)
+        ##################################
+
+        ### Using Ground Truth Scene Graph
+        self.sg_feature_lookup = GQA_gt_sg_feature_lookup(self.split) # Using Ground Truth
+
+
+
+
+        ##################################
+        # common config for QA part
+        ##################################
+        # self.max_src = 30
+        # self.max_trg = 80
+        # self.num_regions = 32
+
+        ##################################
+        # load data based on split
+        ##################################
+        ##################################
+        # load data based on split
+        ##################################
+        programmed_question_path = SPLIT_TO_PROGRAMMED_QUESTION_PATH_TABLE[split]
+        with open(programmed_question_path) as infile:
+            self.data = json.load(infile)
+
+        if split in ['debug', 'train_unbiased']:
+
+            ##################################
+            # build qa vocab
+            # must build vocab with training data
+            ##################################
+            if build_vocab_flag:
+                raise NotImplementedError("Are you sure?")
+                # self.build_qa_vocab()
+            self.load_qa_vocab()
+        else:
+            assert split in ['val_unbiased', 'testdev', 'val_all']
+            ##################################
+            # load qa vocab
+            ##################################
+            if load_vocab_flag:
+                self.load_qa_vocab()
+
+        print("finished loading the data, totally {} instances".format(len(self.data)))
+        self.vocab = GQATorchDatasetVal.TEXT.vocab
+
+    def __getitem__(self, index):
+
+        ##################################
+        # Unpack GQA data items.
+        # - Scene graph would be handled seperately
+        ##################################
+        datum = self.data[index]
+
+        imageId = datum[0]
+        question_text = datum[1]
+        # new_programs = datum[2] # processed format, not the origin program
+        questionID = datum[3]
+        short_answer = datum[4]
+        full_answer_text = datum[5]
+        # program_text_tokenized = datum[6]
+        # annotations = datum[7] # dict keys = ["answer", "question", "fullAnswer"]
+        new_execution_buffer = datum[8]
+        new_programs_hierarchical_decoder = datum[9]
+        types = datum[10]
+
+        ##################################
+        # Prepare short answer
+        # if it is in plural form, convert it into singular form
+        ##################################
+        # TODO: Find the semantically nearest label to 'bottle cap' or extend the vocab
+        #   Problem: there is one label in testdev set, 'bottle cap', that is OOD
+        #   Quick fix: replace 'bottle cap' with a random short answer label
+        if short_answer == 'bottle cap':
+            short_answer = 'bottle'
+        assert short_answer in self.ans2label, short_answer
+        # if short_answer in self.answer_plural_inv_map:
+        #     short_answer = self.answer_plural_inv_map[short_answer]
+        short_answer_label = self.ans2label[short_answer]
+
+        ##################################
+        # Pre-processing (tokenization only), relying on collate_fn to pad and numericalize
+        ##################################
+        question_text_tokenized = GQATorchDatasetVal.TEXT.preprocess(question_text)
+        full_answer_text_tokenized = GQATorchDatasetVal.TEXT.preprocess(full_answer_text)
+
+        ##################################
+        # handle scene graph part
+        ##################################
+        queryID = str(imageId)
+        # if image id not in list, return none?
+        # sg_datum = self.sg_feature_lookup.query(queryID)
+        sg_datum = self.sg_feature_lookup.query_and_translate(queryID, new_execution_buffer) #, fetched_datum=datum)
+
+        ##################################
+        # Do padding
+        ##################################
+        # cut-off
+        new_programs_hierarchical_decoder = new_programs_hierarchical_decoder[: GQATorchDatasetVal.MAX_EXECUTION_STEP]
+        # padding empty
+        new_programs_hierarchical_decoder += (GQATorchDatasetVal.MAX_EXECUTION_STEP - len(new_programs_hierarchical_decoder)) * [[]]
+        # assign new
+        program_text_tokenized = new_programs_hierarchical_decoder
+
+        ##################################
+        # return
+        ##################################
+
+        return (
+            questionID, question_text_tokenized, sg_datum, program_text_tokenized,
+            full_answer_text_tokenized, short_answer_label, types
+        )
+
+    def __len__(self):
+        return len(self.data)
+
+    @property
+    def num_answers(self):
+        return len(self.ans2label)
+
+    def build_qa_vocab(self):
+        ##################################
+        # construct vocab using torchtext, one vocab for Question, Program, Full Answer
+        ##################################
+        tmp_text_list = []
+        for datum in self.data:
+            question_text = datum[1]
+            program_text_tokenized = datum[6]
+            full_answer_text = datum[5]
+            # Question
+            # must do preprocess (tokenization) before doing the build vocab
+            question_text_tokenized = GQATorchDatasetVal.TEXT.preprocess(question_text)
+            tmp_text_list.append(question_text_tokenized)
+            # Program
+            tmp_text_list.append(program_text_tokenized)
+            # Full Answer
+            # must do preprocess (tokenization) before doing the buld vocab
+            full_answer_text_tokenized = GQATorchDatasetVal.TEXT.preprocess(full_answer_text)
+            tmp_text_list.append(full_answer_text_tokenized)
+        GQATorchDatasetVal.TEXT.build_vocab(tmp_text_list, vectors="glove.6B.300d")
+        del tmp_text_list
+
+        # save the vocab
+        with open(ROOT_DIR / 'GraphVQA' / 'questions' / 'GQA_TEXT_obj.pkl', 'wb') as f:
+            pickle.dump(GQATorchDatasetVal.TEXT, f)
+
+    def load_qa_vocab(self):
+        ##################################
+        # load existing vocab using pickle
+        ##################################
+        with open(ROOT_DIR / 'GraphVQA' / 'questions' / 'GQA_TEXT_obj.pkl', 'rb') as f:
+            text_reloaded = pickle.load(f)
+            GQATorchDatasetVal.TEXT = text_reloaded
+
+    @classmethod
+    def indices_to_string(cls, indices, words=False):
+        """Convert word indices (torch.Tensor) to sentence (string).
+        Args:
+            indices: torch.tensor or numpy.array of shape (T) or (T, 1)
+            words: boolean, wheter return list of words
+        Returns:
+            sentence: string type of converted sentence
+            words: (optional) list[string] type of words list
+        """
+        sentence = list()
+        for idx in indices:
+            word = GQATorchDatasetVal.TEXT.vocab.itos[idx.item()]
+
+            if word in ["<pad>", "<start>"]:
+                continue
+            if word in ["<end>"]:
+                break
+
+            # no needs of space between the special symbols
+            if len(sentence) and word in ["'", ".", "?", "!", ","]:
+                sentence[-1] += word
+            else:
+                sentence.append(word)
+
+        if words:
+            return " ".join(sentence), sentence
+        return " ".join(sentence)
+
+
+"""Example json input from QA
+"07333408": {
+    "semantic": [{"operation": "select", "dependencies": [], "argument": "wall (722332)"},
+                 {"operation": "filter color", "dependencies": [0], "argument": "white"},
+                 {"operation": "relate", "dependencies": [1], "argument": "_,on,s (722335)"},
+                 {"operation": "query", "dependencies": [2], "argument": "name"}], "entailed": [], "equivalent": ["07333408"],
+    "question": "What is on the white wall?",
+    "imageId": "2375429",
+    "isBalanced": true,
+    "groups": {"global": "", "local": "14-wall_on,s"},
+    "answer": "pipe",
+    "semanticStr": "select: wall (722332)->filter color: white [0]->relate: _,on,s (722335) [1]->query: name [2]",
+    "annotations": {"answer": {"0": "722335"},
+    "question": {"4:6": "722332"},
+    "fullAnswer": {"1": "722335", "5": "722332"}},
+    "types": {"detailed": "relS", "semantic": "rel", "structural": "query"},
+    "fullAnswer": "The pipe is on the wall."
+    },
+"""
 
 def GQATorchDataset_collate_fn(data):
     """
@@ -668,7 +911,7 @@ def GQATorchDataset_collate_fn(data):
     # question_text_tokenized, sg_datum, program_text_tokenized, full_answer_text_tokenized = zip(*data)
 
     # print("question_text_tokenized", question_text_tokenized)
-    question_text_processed = GQATorchDataset.TEXT.process(question_text_tokenized)
+    question_text_processed = GQATorchDatasetVal.TEXT.process(question_text_tokenized)
     # print("question_text_processed", question_text_processed)
 
     # print("sg_datum", sg_datum)
@@ -680,12 +923,12 @@ def GQATorchDataset_collate_fn(data):
     expand_program_text_tokenized = []
     for instrs in program_text_tokenized:
         expand_program_text_tokenized.extend(instrs)
-    assert len(expand_program_text_tokenized) % GQATorchDataset.MAX_EXECUTION_STEP == 0, expand_program_text_tokenized
-    program_text_tokenized_processed = GQATorchDataset.TEXT.process(expand_program_text_tokenized)
+    assert len(expand_program_text_tokenized) % GQATorchDatasetVal.MAX_EXECUTION_STEP == 0, expand_program_text_tokenized
+    program_text_tokenized_processed = GQATorchDatasetVal.TEXT.process(expand_program_text_tokenized)
     # print("program_text_tokenized_processed", program_text_tokenized_processed)
 
     # print("full_answer_text_tokenized", full_answer_text_tokenized)
-    full_answer_text_tokenized_processed = GQATorchDataset.TEXT.process(full_answer_text_tokenized)
+    full_answer_text_tokenized_processed = GQATorchDatasetVal.TEXT.process(full_answer_text_tokenized)
     # print("full_answer_text_tokenized_processed", full_answer_text_tokenized_processed)
 
     short_answer_label = torch.LongTensor(short_answer_label)
@@ -702,7 +945,7 @@ if __name__ == '__main__':
     split = 'val_unbiased'
     # split = 'testdev'
 
-    dataset = GQATorchDataset(split, build_vocab_flag=False, load_vocab_flag=True)
+    dataset = GQATorchDatasetVal(split, build_vocab_flag=False, load_vocab_flag=True)
     # dataset[0]
 
     ##################################
@@ -740,13 +983,13 @@ if __name__ == '__main__':
         this_batch_size = questions.size(1)
         for batch_idx in range(min(this_batch_size, 128)):
             question = questions[:, batch_idx].cpu()
-            question_sent, _ = GQATorchDataset.indices_to_string(question, True)
+            question_sent, _ = GQATorchDatasetVal.indices_to_string(question, True)
             print("question_sent", question_sent)
 
-            for instr_idx in range(GQATorchDataset.MAX_EXECUTION_STEP):
-                true_batch_idx = instr_idx + GQATorchDataset.MAX_EXECUTION_STEP * batch_idx
+            for instr_idx in range(GQATorchDatasetVal.MAX_EXECUTION_STEP):
+                true_batch_idx = instr_idx + GQATorchDatasetVal.MAX_EXECUTION_STEP * batch_idx
                 gt = programs[:, true_batch_idx].cpu()
-                gt_sent, _ = GQATorchDataset.indices_to_string(gt, True)
+                gt_sent, _ = GQATorchDatasetVal.indices_to_string(gt, True)
                 if len(gt_sent) > 0:
                     print("gt_sent", gt_sent)
 

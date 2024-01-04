@@ -9,7 +9,7 @@ from torch.nn import Sequential as Seq, Linear as Lin, ReLU
 from torch_scatter import scatter_mean, scatter_add
 import logging
 import torch_geometric
-from gqa_dataset_entry import GQATorchDataset
+from gqa_dataset_entry import GQATorchDatasetVal
 
 from graph_utils import my_graph_layernorm
 
@@ -214,7 +214,7 @@ class RecurrentExecutionEngine(torch.nn.Module):
         history_vector_list = []
         batch_size = instr_vectors.size(1)
         history_vector = torch.zeros(batch_size, self.num_node_features, device=instr_vectors.device) # init as zero paddings
-        for instr_idx in range(GQATorchDataset.MAX_EXECUTION_STEP):
+        for instr_idx in range(GQATorchDatasetVal.MAX_EXECUTION_STEP):
             u = instr_vectors[instr_idx] # fetch the i^th instruction vector
             x_out = self.engine_one_step_execution_cell(x, edge_index, edge_attr, u, history_vector, batch)
             x_out = self.graph_layer_norm(x_out, batch)
@@ -301,7 +301,7 @@ class PositionalEncoding(torch.nn.Module):
         self.dropout = torch.nn.Dropout(p=dropout)
 
         pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.long).unsqueeze(1)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
@@ -327,8 +327,8 @@ class TransformerProgramDecoder(torch.nn.Module):
         ##################################
         # For Hierarchical Deocding
         ##################################
-        TEXT = GQATorchDataset.TEXT
-        self.num_queries = GQATorchDataset.MAX_EXECUTION_STEP
+        TEXT = GQATorchDatasetVal.TEXT
+        self.num_queries = GQATorchDatasetVal.MAX_EXECUTION_STEP
         self.query_embed = torch.nn.Embedding(self.num_queries, ninp)
 
         decoder_layers = torch.nn.TransformerDecoderLayer(ninp, nhead, nhid, dropout)
@@ -416,7 +416,7 @@ class TransformerProgramDecoder(torch.nn.Module):
         max_output_len = 16 # 80 # program concat 80, full answer max 15, instr max 10
         batch_size = memory.size(1) * self.num_queries
 
-        TEXT = GQATorchDataset.TEXT
+        TEXT = GQATorchDatasetVal.TEXT
         output = torch.ones(max_output_len, batch_size).long().to(memory.device) * TEXT.vocab.stoi[TEXT.init_token]
 
 
@@ -502,7 +502,7 @@ class TransformerFullAnswerDecoder(torch.nn.Module):
         max_output_len = 20 # 80 # program concat 80, full answer max 15, instr max 10
         batch_size = memory.size(1)
 
-        TEXT = GQATorchDataset.TEXT
+        TEXT = GQATorchDatasetVal.TEXT
         output = torch.ones(max_output_len, batch_size).long().to(memory.device) * TEXT.vocab.stoi[TEXT.init_token]
 
 
@@ -575,13 +575,12 @@ class GroundTruth_SceneGraph_Encoder(torch.nn.Module):
     def forward(self,
                 gt_scene_graphs,
                 ):
-        if gt_scene_graphs is not None and gt_scene_graphs.edge_attr.dtype != torch.long:
-            gt_scene_graphs.edge_attr = gt_scene_graphs.edge_attr.long()
+
         ##################################
         # Use glove embedding to embed ground truth scene graph
         ##################################
         # [ num_nodes, MAX_OBJ_TOKEN_LEN] -> [ num_nodes, MAX_OBJ_TOKEN_LEN, sg_emb_dim]
-        x_embed     = self.sg_vocab_embedding(gt_scene_graphs.x.long())
+        x_embed     = self.sg_vocab_embedding(gt_scene_graphs.x)
         # [ num_nodes, MAX_OBJ_TOKEN_LEN, sg_emb_dim] -> [ num_nodes, sg_emb_dim]
         x_embed_sum = torch.sum(input=x_embed, dim=-2, keepdim=False)
         # [ num_edges, MAX_EDGE_TOKEN_LEN] -> [ num_edges, MAX_EDGE_TOKEN_LEN, sg_emb_dim]
@@ -616,19 +615,18 @@ The whole Pipeline. put everything here
 class PipelineModel(torch.nn.Module):
     def __init__(self):
         super(PipelineModel, self).__init__()
-        print("innit bruv (line 615)")
 
         ##################################
         # build scene graph encoder
         ##################################
         self.scene_graph_encoder = GroundTruth_SceneGraph_Encoder()
-        print("scene_graph_encoder set up")
+
 
         ##################################
         # build text embedding
         ##################################
-        TEXT = GQATorchDataset.TEXT
-        text_vocab = GQATorchDataset.TEXT.vocab
+        TEXT = GQATorchDatasetVal.TEXT
+        text_vocab = GQATorchDatasetVal.TEXT.vocab
         text_emb_dim = 300 # 300d glove
         text_pad_idx = text_vocab.stoi[TEXT.pad_token]
         text_vocab_size = len(text_vocab)
@@ -749,11 +747,9 @@ class PipelineModel(torch.nn.Module):
                 full_answers_input=None,
                 SAMPLE_FLAG=False,
                 ):
-        
-        if gt_scene_graphs is not None:
-            x_encoded, edge_attr_encoded, _ = self.scene_graph_encoder(gt_scene_graphs)
-        else:
-            x_encoded = None
+
+        x_encoded, edge_attr_encoded, _ = self.scene_graph_encoder(gt_scene_graphs)
+
         ##################################
         # Encode questions
         ##################################
@@ -845,8 +841,8 @@ if __name__ == "__main__":
     ##################################
     # Need to have the vocab first to debug
     ##################################
-    from gqa_dataset_entry import GQATorchDataset, GQATorchDataset_collate_fn
-    debug_dataset = GQATorchDataset(
+    from gqa_dataset_entry import GQATorchDatasetVal, GQATorchDataset_collate_fn
+    debug_dataset = GQATorchDatasetVal(
             # split='train_unbiased',
             split='val_unbiased', #
             # split='testdev',
@@ -899,5 +895,8 @@ if __name__ == "__main__":
         )
 
         print("model output:", output)
+
+
+
 
         break

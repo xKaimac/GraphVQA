@@ -622,6 +622,7 @@ if True:
     fileStr = ROOT_DIR / 'GraphVQA/sceneGraphs/val_sceneGraphs.json'
     with open(fileStr) as f:
         sg_data = json.load(f)
+    print("val_sceneGraphs.json loaded")
     val_questions_path = ROOT_DIR / 'GraphVQA/questions/original/val_balanced_questions.json'
     val_programs_path = ROOT_DIR / 'GraphVQA/questions/val_balanced_programs.json'
     # val_questions_path = ROOT_DIR / 'GraphVQA/questions/original/val_balanced_masked_questions.json'

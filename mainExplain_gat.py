@@ -45,7 +45,7 @@ import torch.backends.cudnn as cudnn
 import pathlib
 import util.misc as utils
 
-from gqa_dataset_entry import GQATorchDataset, GQATorchDataset_collate_fn
+from gqa_dataset_entry import GQATorchDataset, GQATorchDataset_collate_fn, GQATorchDatasetVal
 from pipeline_model_gat import PipelineModel # use gat model
 import json
 
@@ -241,7 +241,7 @@ def main(args):
 
     val_dataset_list = []
     for eval_split in args.evaluate_sets:
-        val_dataset_list.append(GQATorchDataset(
+        val_dataset_list.append(GQATorchDatasetVal(
             split=eval_split,
             build_vocab_flag=False,
             load_vocab_flag=args.evaluate
@@ -341,7 +341,7 @@ def main(args):
     ##################################
     # criterion = torch.nn.CrossEntropyLoss().cuda()
 
-    text_pad_idx = GQATorchDataset.TEXT.vocab.stoi[GQATorchDataset.TEXT.pad_token]
+    text_pad_idx = GQATorchDatasetVal.TEXT.vocab.stoi[GQATorchDatasetVal.TEXT.pad_token]
     criterion = {
         "program": torch.nn.CrossEntropyLoss(ignore_index=text_pad_idx).to(device=cuda),
         "full_answer": torch.nn.CrossEntropyLoss(ignore_index=text_pad_idx).to(device=cuda),
@@ -739,11 +739,11 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
     with torch.no_grad():
         end = time.time()
         for i, (data_batch) in enumerate(val_loader):
-            questionID, questions, gt_scene_graphs, programs, full_answers, short_answer_label, types = data_batch
+            questionID, questions, gt_scene_graphs, full_answers, short_answer_label = data_batch
 
-            questions, gt_scene_graphs, programs, full_answers, short_answer_label = [
+            questions, gt_scene_graphs, full_answers, short_answer_label = [
                 datum.to(device=cuda, non_blocking=True) for datum in [
-                    questions, gt_scene_graphs, programs, full_answers, short_answer_label
+                    questions, gt_scene_graphs, full_answers, short_answer_label
                 ]
             ]
 
@@ -784,9 +784,7 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
             else:
 
                 programs_target = programs
-
                 full_answers_target = full_answers
-
                 ##################################
                 # Greedy decoding-based evaluation
                 ##################################
@@ -799,6 +797,7 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
                 )
 
                 programs_output_pred,  short_answer_logits = output
+
             ##################################
             # Neural Execution Engine Bitmap loss
             # ground truth stored at gt_scene_graphs.y
@@ -816,17 +815,20 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
             ##################################
             this_short_answer_acc1 = accuracy(short_answer_logits.detach(), short_answer_label, topk=(1,))
             short_answer_acc.update(this_short_answer_acc1[0].item(), this_batch_size)
-            text_pad_idx = GQATorchDataset.TEXT.vocab.stoi[GQATorchDataset.TEXT.pad_token]
+
+            text_pad_idx = GQATorchDatasetVal.TEXT.vocab.stoi[GQATorchDatasetVal.TEXT.pad_token]
 
             this_program_acc, this_program_group_acc, this_program_non_empty_acc = program_string_exact_match_acc(
                 programs_output_pred, programs_target,
                 padding_idx=text_pad_idx,
-                group_accuracy_WAY_NUM=GQATorchDataset.MAX_EXECUTION_STEP
+                group_accuracy_WAY_NUM=GQATorchDatasetVal.MAX_EXECUTION_STEP
             )
 
             program_acc.update(this_program_acc, this_batch_size)
-            program_group_acc.update(this_program_group_acc, this_batch_size // GQATorchDataset.MAX_EXECUTION_STEP)
+            program_group_acc.update(this_program_group_acc, this_batch_size // GQATorchDatasetVal.MAX_EXECUTION_STEP)
             program_non_empty_acc.update(this_program_non_empty_acc, this_batch_size)
+
+
 
             # this_full_answers_acc = string_exact_match_acc(
             #     full_answers_output_pred.detach(), full_answers_target, padding_idx=text_pad_idx
@@ -844,7 +846,7 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
                     # print Question and Question ID
                     ##################################
                     question = questions[:, batch_idx]
-                    question_sent, _ = GQATorchDataset.indices_to_string(question, True)
+                    question_sent, _ = GQATorchDatasetVal.indices_to_string(question, True)
                     print("Question({}) QID({}):".format(batch_idx, questionID[batch_idx]), question_sent)
                     if utils.is_main_process():
                         logging.info("Question({}) QID({}): {}".format(batch_idx, questionID[batch_idx], question_sent))
@@ -853,12 +855,12 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
                     # print program prediction
                     ##################################
 
-                    for instr_idx in range(GQATorchDataset.MAX_EXECUTION_STEP):
-                        true_batch_idx = instr_idx + GQATorchDataset.MAX_EXECUTION_STEP * batch_idx
+                    for instr_idx in range(GQATorchDatasetVal.MAX_EXECUTION_STEP):
+                        true_batch_idx = instr_idx + GQATorchDatasetVal.MAX_EXECUTION_STEP * batch_idx
                         gt = programs[:, true_batch_idx]
                         pred = programs_output_pred[:, true_batch_idx]
-                        pred_sent, _ = GQATorchDataset.indices_to_string(pred, True)
-                        gt_sent, _ = GQATorchDataset.indices_to_string(gt, True)
+                        pred_sent, _ = GQATorchDatasetVal.indices_to_string(pred, True)
+                        gt_sent, _ = GQATorchDatasetVal.indices_to_string(gt, True)
 
                         if len(pred_sent) == 0 and len(gt_sent) == 0:
                             # skip if both target and prediciton are empty
@@ -905,19 +907,19 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
                     # print Question and Question ID
                     ##################################
                     question = questions[:, batch_idx]
-                    question_sent, _ = GQATorchDataset.indices_to_string(question, True)
+                    question_sent, _ = GQATorchDatasetVal.indices_to_string(question, True)
 
                     ##################################
                     # print program prediction
                     ##################################
                     ground_truth_program_list = []
                     predicted_program_list = []
-                    for instr_idx in range(GQATorchDataset.MAX_EXECUTION_STEP):
-                        true_batch_idx = instr_idx + GQATorchDataset.MAX_EXECUTION_STEP * batch_idx
+                    for instr_idx in range(GQATorchDatasetVal.MAX_EXECUTION_STEP):
+                        true_batch_idx = instr_idx + GQATorchDatasetVal.MAX_EXECUTION_STEP * batch_idx
                         gt = programs[:, true_batch_idx]
                         pred = programs_output_pred[:, true_batch_idx]
-                        pred_sent, _ = GQATorchDataset.indices_to_string(pred, True)
-                        gt_sent, _ = GQATorchDataset.indices_to_string(gt, True)
+                        pred_sent, _ = GQATorchDatasetVal.indices_to_string(pred, True)
+                        gt_sent, _ = GQATorchDatasetVal.indices_to_string(gt, True)
 
                         if len(pred_sent) == 0 and len(gt_sent) == 0:
                             # skip if both target and prediciton are empty
@@ -945,9 +947,9 @@ def validate(val_loader, model, criterion, args, FAST_VALIDATE_FLAG=False, DUMP_
                         "question": question_sent,
                         "ground_truth_program_list": ground_truth_program_list,
                         "predicted_program_list": predicted_program_list,
-                        "answer": GQATorchDataset.label2ans[short_answer_label[batch_idx].item()],
+                        "answer": GQATorchDatasetVal.label2ans[short_answer_label[batch_idx].item()],
                         # predicted short answer
-                        "prediction": GQATorchDataset.label2ans[short_answer_pred_label[batch_idx].item()],
+                        "prediction": GQATorchDatasetVal.label2ans[short_answer_pred_label[batch_idx].item()],
                         "prediction_score": '{:.2f}'.format(short_answer_pred_score[batch_idx].item()),
                         "types": types[batch_idx],
                     }
